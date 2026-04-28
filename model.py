@@ -57,7 +57,7 @@ class LayerNormalization(nn.Module):
         std = x.std(dim = -1, keepdim = True)
         return self.aplha * (x -mean) / (std + self.epsilon) + self.bias
         
-class FeedDorward(nn.Module):
+class FeedForward(nn.Module):
     def __init__(self, d_model : int, d_ff: int, dropout)-> None:
         super().__init__()
         self.linear_1 = nn.Linear(d_model, d_ff) 
@@ -86,14 +86,14 @@ class MultiHeadAttention(nn.Module):
         attention_scores = (query @ key.transpose(-2, -1)) / math.sqrt(d_k)
         if mask is not None:
             attention_scores.masked_fill_(mask == 0, -1e9)
-        attention_scores = attention_scores.softmax(dim=-1) # (batch, h, seq_len, seq_len) # Apply softmax
+        attention_scores = attention_scores.softmax(dim=-1)
         if dropout is not None:
             attention_scores = dropout(attention_scores)
         
     def forward(self, q, k, v, mask):
-        query = self.w_q(q) # (batch, seq_len, d_model) --> (batch, seq_len, d_model)
-        key = self.w_k(k) # (batch, seq_len, d_model) --> (batch, seq_len, d_model)
-        value = self.w_v(v) # (batch, seq_len, d_model) --> (batch, seq_len, d_model)
+        query = self.w_q(q)
+        key = self.w_k(k) 
+        value = self.w_v(v) 
 
         query = query.view(query.shape[0], query.shape[1], self.h, self.d_k).transpose(1, 2)
         key = key.view(key.shape[0], key.shape[1], self.h, self.d_k).transpose(1, 2)
@@ -107,7 +107,7 @@ class MultiHeadAttention(nn.Module):
 
 class Encoder(nn.Module):
 
-    def __init__(self, features: int, self_attention_block: MultiHeadAttention, feed_forward_block: FeedForwardBlock, dropout: float) -> None:
+    def __init__(self, features: int, self_attention_block: MultiHeadAttention, feed_forward_block: FeedForward, dropout: float) -> None:
         super().__init__()
         self.self_attention_block = self_attention_block
         self.feed_forward_block = feed_forward_block
