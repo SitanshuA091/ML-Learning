@@ -130,7 +130,7 @@ class Encoder(nn.Module):
             x = layer(x, mask)
         return self.norm(x)\
             
-class DecoderBlock(nn.Module):
+class decoder(nn.Module):
 
     def __init__(self, features: int, self_attention_block: MultiHeadAttention, cross_attention_block: MultiHeadAttention, feed_forward_block: FeedForward, dropout: float) -> None:
         super().__init__()
@@ -191,4 +191,42 @@ class Transformer(nn.Module):
     def project(self, x):
         return self.projection_layer(x)
     
+def Build_Model(source_vocab_size: int, trgt_vocab_size: int, source_seq_len, trgt_seq_len, d_model: int =512, N: int = 6, h: int =8, dropout : float =0.1, d_ff = 2048):
+    source_emb = InputEmbedding(d_model, source_vocab_size)
+    trgt_emb = InputEmbedding(d_model, trgt_vocab_size)
+    source_pos = PositionalEncoding(d_model, source_seq_len, dropout)
+    trgt_pos = PositionalEncoding(d_model, trgt_seq_len, dropout)
+    
+    encoder_blocks = []
+    for _ in range(N):
+        encoder_self_attention_block = MultiHeadAttention(d_model, h, dropout)
+        feed_forward_block = FeedForward(d_model, d_ff, dropout)
+        encoder_block = encoder(d_model, encoder_self_attention_block, feed_forward_block, dropout)
+        encoder_blocks.append(encoder_block)
+
+    # Create the decoder blocks
+    decoder_blocks = []
+    for _ in range(N):
+        decoder_self_attention_block = MultiHeadAttention(d_model, h, dropout)
+        decoder_cross_attention_block = MultiHeadAttention(d_model, h, dropout)
+        feed_forward_block = FeedForward(d_model, d_ff, dropout)
+        decoder_block = decoder(d_model, decoder_self_attention_block, decoder_cross_attention_block, feed_forward_block, dropout)
+        decoder_blocks.append(decoder_block)
+    
+    # Create the encoder and decoder
+    encoder = Encoder(d_model, nn.ModuleList(encoder_blocks))
+    decoder = Decoder(d_model, nn.ModuleList(decoder_blocks))
+    
+    # Create the projection layer
+    projection_layer = ProjectionLayer(d_model, trgt_vocab_size)
+    
+    # Create the transformer
+    transformer = Transformer(encoder, decoder, source_emb, trgt_emb, source_pos, trgt_pos, projection_layer)
+    
+    # Initialize the parameters
+    for p in transformer.parameters():
+        if p.dim() > 1:
+            nn.init.xavier_uniform_(p)
+    
+    return transformer
     
