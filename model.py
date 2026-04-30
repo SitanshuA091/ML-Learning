@@ -167,3 +167,28 @@ class ProjectionLayer(nn.Module):
         return self.proj(x)
     
 ##Transformer build final left
+class Transformer(nn.Module):
+    def __init__(self, encoder: Encoder,decoder: Decoder, source_emb : InputEmbedding, trgt_emb: InputEmbedding, source_pos: PositionalEncoding, trgt_pos: PositionalEncoding,projection_layer: ProjectionLayer)-> None:
+        super.__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+        self.source_emb = source_emb
+        self.trgt_emb =  trgt_emb
+        self.source_pos = source_pos
+        self.trgt_pos = trgt_pos
+        self.projection_layer = projection_layer
+        
+    def encode(self, source, source_mask):
+        source = self.source_emb(source)
+        source = self.source_pos(source)
+        return self.encoder(source, source_mask)
+    
+    def decode(self, encoder_output, source_mask, trgt, trgt_mask):
+        trgt = self.trgt_emb(trgt)
+        trgt = self.trgt_pos(trgt)
+        return self.decoder(trgt, encoder_output, source_mask, trgt_mask)
+    
+    def project(self, x):
+        return self.projection_layer(x)
+    
+    
