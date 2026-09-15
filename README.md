@@ -1,6 +1,6 @@
 # ML & DL Foundations
 
-This repository is a monorepo tracking my ML/DL learning journey, component by component containing core concepts and components.
+This repository is a monorepo tracking my ML/DL learnings, component by component containing core concepts, sample notes and simplified implementations.
 
 ## Contents
 ### **TOPICS** (existing and future)
