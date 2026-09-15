@@ -5,7 +5,7 @@ This repository is a monorepo tracking my ML/DL learnings, component by componen
 ## Contents
 ### **TOPICS** (existing and future)
 - Tokenization `(BPE, Sentencepiece)`
-- PositionalEmbeddings `(Abs PE, ROPE,2D Spatial PE)
+- PositionalEmbeddings `(Abs PE, ROPE,2D Spatial PE)`
 - Attention Variants `(MHA, MQA, GQA, Flash Attention..)`
 - Original Transormer
 - Vision Transformer/s
