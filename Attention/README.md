@@ -59,4 +59,12 @@ above is a single attention head
 ---
 ## **MULTI HEAD ATTENTION**
 - Instead of single head we have multiple heads wit their own set of Q, K, V weights of dimension d x d/h, h is no. of heads.
-- each head mechanism remains the same 
+- each head mechanism remains the same, it will have their own keys, queries and value matrices and they go through their own scaled self attention in each of the heads
+- each cell produces its own output which is then concatenated and run through a d X d linear layer ( output dimension is lower since initial weights were of d X d/no. of heads).  
+<em>the randomly initialized weights W<sub>q</sub> are supposed to be different in all 3 heads not same random weight matrice but in practice same are used</em>  
+
+- In original transformer the embedding dimension is 512 (d<sub>model</sub>), no. of attention heads are 8,`d/h ` = 64
+- Relating any 2 inputs becomes an O(1) operation
+- the output of the multi head self attention layer is fed to a FFN in the original transformer
+- Original transformer used 2 layer network with ReLU activation
+- each embedding is passed on to the FFN point wise 
