@@ -11,6 +11,7 @@
 - next we have a context vector which combines all attention weights acc to the proportion its just the weighted sum of each attention weightw.r.t corresponding encoder hidden state(hi). 
 - at decoder we say start with the start token's embeddings the context vector is concatenated with the embedding vectors.
 - the combined concatenated vector leads to the first hidden state of the decoder which goes throgh the softmax to produce the 
+- encoder hidden states can be viewed as an information store, current decoder state serves as a query and that implies  encoder hidden states being viewed as **keys** and **values** similar to dictionaries in python.
 - There are multiple variations of the scoring function
   - **Additive/Bahdanau attention** : f(h<sub>i</sub>, s<sub>j</sub>) = v<sup>T</sup>tanh(Wh<sub>i</sub> + Us<sub>j</sub>)
   V - vector to make it scalar, W, U are randomly initialized set of weights, this scoring is trained like a FFN
@@ -18,3 +19,44 @@
   `f(h<sub>i</sub>, s<sub>j</sub>) = S<sub>j</sub><sup>T</sup>h<sub>i</sub>
   here there are 2 options dot product b/w decoder hidden state and each encoder hidden state or an addition of learnable weights - S<sub>j</sub><sup>T</sup>W*h<sub>i</sub>
   ![alt text](assets/image-4.png)
+  - current hidden state is used for scoring, a context vector is calculated and then concatenated with the decoder hidden state which are then multiplied by another set of weights and then run through tanh to produce s<sup>^</sup> <sub>j</sub> which is run through softmax to generate the next word.
+  - All these variants are forms of global attention where all the encoder hidden states can be computationally expensive.
+
+
+
+### Shortcomings of recurrence based attention & RNNs
+- computing attention at particular timetsep reqs all previous timesteps all to be recomputed
+- final hidden state has to capture a lot long dist relationships
+
+## SELF ATTENTION
+- We throw away recurrence and base each encoder output on all encoder inputs
+- Simpler version - embeddings are multiplied with itself (dot prod) these then go through softmax to produce attention weights, attention weights are multiplied with input embeddings which produce encoder outputs
+- Issues - No learnable weights apart from embedding layer
+
+### Scaled Dot Product Self Attention
+----
+- rather than multiplying raw embeddings we turn them into queries, keys and values.
+- embedding X1, X2..X3(assume 3 embeddings in seq2seq model) is multiplied by W<sub>q</sub> for query vector, W<sub>k</sub> for key vector and finally W<sub>v</sub> for value vector
+- Q1, K1, V1 are X1*Q1,..,X1*V1 and we do this with X2, X3 to produce Q2, K2, V2..Q3..V3.
+- Q<sub>1</sub> is multiplied by evecry key vector (K<sub>1</sub>, K<sub>2</sub>, K<sub>3</sub>) - Q<sub>1</sub>*K<sub>1</sub>, Q<sub>1</sub>*K<sub>2</sub>..
+- the result of above is used to create attention weights which is taking these attention score and putting it through a softmax, but attention scores are scaled by root of the key size (sqrt(d<sub>k</sub>)) tyhen put through softmax
+- we take these attention weights (**a**) and perform a weighted sum of value vectors (W<sub>v</sub>) and produce the output
+x̂² = summation(j)(a<sub>ij</sub>W<sub>vj</sub>)
+- same things is done for the next encoder input using second query 
+- this can be done in a single pass where the Q,K,V Weights are produced for all words in a single pass. 
+![alt text](assets/image-5.png)
+Formula can be written as this:
+Attention(Q, K, V) = softmax(QK<sup>T</sup>/sqrt(d<sub>k</sub>))*V --> **x̂** (<sub>t x d</sub>)
+- this mechanism where attention weights go in produce Q, K, V is called an attention head(single)
+
+![alt text](assets/image-6.png)
+
+above is a single attention head
+
+- Self Attention struggles to capture multiple relationships in a sequence at once - `Adam went to Mcdonalds to meet his friend that afternoon`.
+- What, Where, Who & When are the components we need to attend to whereas Self Attention only focuses on singularly where one embedding gets the focus.
+
+---
+## **MULTI HEAD ATTENTION**
+- Instead of single head we have multiple heads wit their own set of Q, K, V weights of dimension d x d/h, h is no. of heads.
+- each head mechanism remains the same 
