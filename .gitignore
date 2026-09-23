@@ -20,4 +20,3 @@ wandb/
 *.swo
 .DS_Store
 Thumbs.db
-explain.md
