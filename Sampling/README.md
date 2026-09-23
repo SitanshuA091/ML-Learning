@@ -57,3 +57,44 @@ T > 1 --> **differences compressed**
 
 so temperature controls the distribution making it sharper or flatter.  
 If Greedy Decoding is defaulted then temperature has no effect on which token gets selected(for positive temperatures)
+
+### Top-K Sampling
+---
+Top k keeps the **k** highest scoring tokens, removes everything else and then samples acc to the probabilities  
+After Softmax
+```
+A → 0.50
+B → 0.25
+C → 0.15
+D → 0.07
+E → 0.03
+```
+with k=3 we keep 
+```
+A → 0.50
+B → 0.25
+C → 0.15
+D & E removed
+```
+the remaining probabilities are then normalized so they sum to 1
+A → 0.56, B → 0.28, C → 0.16
+
+### Top-p Sampling
+Top-p(nucleus) is similar to top-k we say keep the smallest set of probability tokens whose cumulative probability reaches at least p
+``` 
+top_p = 0.90
+   &
+Token     Probability --> Cumulative
+A           0.40            0.40
+B           0.25            0.65
+C           0.15            0.80
+D           0.10            0.90
+E           0.06            0.96
+F           0.04            1.00
+```
+we keep 
+```
+A, B, C, D
+```
+as 0.40 + 0.25 + 0.15 + 0.10 = 0.90
+after this E & F are discared and we renormalize A-D and sample from them 
