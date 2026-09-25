@@ -1,6 +1,6 @@
 # ML & DL Foundations
 
-This repository is a monorepo containing my ML/DL learnings, It has my older sample notes files
+This repository is a monorepo containing my ML/DL learnings, It has my older sample notes compressed in README files
 with some revised implementations
 
 ## Contents
