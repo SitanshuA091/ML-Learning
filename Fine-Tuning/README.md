@@ -35,4 +35,33 @@ $\alpha$ is a constant scaling hyperparameter
 LoRA is just one of several efficient fine-tuning approaches. A notable variant is Quantization LoRA (**QLoRA**), which combines high-precision computation with low-precision storage.
 
 ## QLORA
-QLORA - Quantized LoRA is an efficient finetuning approach that reduces memory further while finetuning models
+QLORA - Quantized LoRA is an efficient finetuning approach that reduces memory further while finetuning Large Language models. It Introduces multiple innovations to do so:-  
+1) **4-bit NormalFLoat** - a quantization datatype for normally distributed data proposed to be better than 4-bit integers and 4-bit floats.
+2) **Double Quantization** - a method which quantizes the quantization constants.
+3) **Paged Optimizers** - pages optimizer states back n forth b/w GPU VRAM and CPU RAM.  
+Essentially QLORA is an extended version of LoRA it works by quantizing the weight params in the pretrained LLM to 4-bit precision(typically in 32 bits), this makes fine tuning possible on a single GPU
+
+### 4-bit Normal FLoat
+NF4 is information theoretically optimal for data that has a normal distribution (common feature in NN weights) 
+- 16-bit floats have 1 bit sign, 5 bit exponent and 10bit fraction
+- bfloat16 has same for sign, exponent gets 8 bits and fraction gets 7 bbits
+
+<em> fraction - mantissa </em>
+
+NF4 has a range of [-8, 7] and Fp8 has [-127, 127], QLoRA uses brainfloat datatype to perform computational operation using backprop and forward passes. most weights are anyway clustered around 0.0 very few near extreme ends like -2.0 or +2.0.  
+NF4 (quantiled quantization) designs its 16 bin values so that each of the 16 slots have an equal probability of recieving a weight, bins are spaced **close together around 0.0 and are sparse near the extremes**.
+when a 16-bit weight matrix(FP16/BF16) is saved using NF4 QLORA sstores 2 things:
+- 4 bit weight matrix every weight is mapped to an index from 0-15 corresponding to 16 NF4 quantile levels (packs 2 weights into a single byte)
+- double quantile block scale constants - weights are split into blocks (typically size 64), each block gets a scaling constant c to normalize its weight into the range [-1, 1] before mapping to NF4. 
+
+--- 
+
+In QLORA   
+**Total weight W = = Base Model (Frozen, 4-bit NF4) +  △W (Trainable, 16-bit FP16/BF16)**
+- since A & B have tiny inner dimensions they account for less than 1% of total model params Keeping them in 16-bit precision ensures training stability and high-gradient accuracy while taking up negligible VRAM.
+
+### How Optimizer States & Paged Memory Work
+-  The optimizer states for $A$ and $B$ sit in GPU VRAM for fast backpropagation steps.
+- f a long context sequence causes a temporary VRAM spike (activation memory), the Paged Optimizer automatically pages inactive parts of the Adam optimizer states out to CPU RAM via NVIDIA Unified Memory.
+- Once the VRAM spike passes, those pages are swapped back into GPU VRAM as needed.  
+Rest of the fine tuning process stays same
