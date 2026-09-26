@@ -6,6 +6,16 @@ LLM/Model fine tuning was to train the entire model the hidden layers b/w input 
 - storage req. for the checkpoints are expensive
 - switching b/w diff full fine tuned models is difficult as models need to be loaded/unloaded
 
+## PEFT(Parameter Efficient Fine Tuning)
+Parameter efficient fine tuning overcomes issues listed above by fine tuning only a small subset of the model's parameters.  
+When PEFT is used amount of storage required is also only a feww MBs for each downstream dataset which is very low. Pretrained model (or LLMS) is combined with the small trained weights from PEFT techniques and model can be used for numerous tasks.  
+Several PEFT methods are there such as Adapter, LoRA,  QLoRA etc.   
+**Adapter** - Adapter layers are added in b/w the model's different layers, eg. - adapeter layers are added after multi head attention and FFN layers in Transformers.
+
+<img width="300" height="240" alt="image"  src="assets/image.png" />
+
+---
+
 ## LORA 
 
 LORA stands for **Low Rank Adaptation** its a parameter efficient fine tuning technique, here Low Rank refers to minimum no. of rows and columns in a matrix, the rank is smaller than the dimensions of the matrix and it is basically a compact representation of a matrix.  
