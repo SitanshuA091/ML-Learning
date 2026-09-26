@@ -1,4 +1,4 @@
-## **ATTENTION MECHANISM**
+# **ATTENTION**
 **Attention** in general is how to carry forward context in a sequence from prior timesteps or from many words ago.
 - In seq2seq models rather than decoding timestep, the decoder accesses encoder's hidden states.
 - at the end where encodings go to the decoder it goes through some scoring function f(h, s), this coring function can also be called an alignmnet model.
@@ -68,3 +68,25 @@ above is a single attention head
 - the output of the multi head self attention layer is fed to a FFN in the original transformer
 - Original transformer used 2 layer network with ReLU activation
 - each embedding is passed on to the FFN point wise 
+
+## Multi-Query Atention
+Multi-Query Attention (MQA) is a type of attention mechanism that can accelerate the speed of generating tokens in the decoder while ensuring model performance. Issues with standard generation with autoregressive language model:-
+- during inference each position's query attends to all the key-value pairs generated on or before the position, the output self attention(single head in MHA) layer at a specific position affects generation of next token as parallel computation does'nt happen so decoding becomes slow.
+MQA simplifies this by sharing the same set of keys and values across multiple heads while maintaining different queries for each head
+Key Concepts it introduces are: 
+- Shared Keys and Values- MQA uses the same keys and values for all attention heads whilst the set of queries are different for each attention head
+- given embedding dimension d = 512, h = 8 heads and d<sub>k</sub> = 64   
+for MHA:  
+W<sub>q</sub> (512, 512) -> gets sliced into 8 x 64 
+W<sub>k</sub> (512, 512) -> gets sliced into 8 x 64  
+W<sub>v</sub> (512, 512)  -> gets sliced into 8 x 64 
+for MQA:  
+W<sub>q</sub> (512, 512) -> 8 query heads of size 64 
+W<sub>k</sub> (512, 512) -> single key head of size 64
+W<sub>v</sub> (512, 512) -> single key head of size 64
+
+### Computation in MQA (for single head)
+**Head<sub>1</sub> = Softmax(Q<sub>1</sub> * K <sup>T</sup>/sqrt(d<sub>k</sub>)) * V**
+**Head<sub>2</sub> = Softmax(Q<sub>2</sub> * K <sup>T</sup>/sqrt(d<sub>k</sub>)) * V**
+
+Practically (`MQA.py`) we use tensor broadcasting- the single K & V tensors automatically broadcasr acros all h query heads during matmul - `Q @ K.transponse`
