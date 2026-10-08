@@ -90,3 +90,11 @@ W<sub>v</sub> (512, 512) -> single key head of size 64
 **Head<sub>2</sub> = Softmax(Q<sub>2</sub> * K <sup>T</sup>/sqrt(d<sub>k</sub>)) * V**
 
 Practically (`MQA.py`) we use tensor broadcasting- the single K & V tensors automatically broadcasr acros all h query heads during matmul - `Q @ K.transponse`
+
+## Grouped Query Attention
+In standard MHA each of the h query heads has its own dedicated key n value head, in MQA takes it ot opposite end of extreme by using a single shared key-value pair across all query heads. GQA (**Grouped Query Attention**) strikes a balance by organzining query heads into groups where each group has a shared key-value head, instead of h KV heads (MHA) or just 1 KV head (MQA), we use g KV heads where 1 < g < h.  
+```
+example : with 32 query heads and 8 KV heads, every 4 query heads share one KV head.
+```
+The number of groups **g** depends on hardware limits, batch size targets, context length and emperical validation  
+Its benefits are KV cache is proportionally smaller than MHA
