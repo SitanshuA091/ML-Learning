@@ -98,3 +98,28 @@ example : with 32 query heads and 8 KV heads, every 4 query heads share one KV h
 ```
 The number of groups **g** depends on hardware limits, batch size targets, context length and emperical validation  
 Its benefits are KV cache is proportionally smaller than MHA
+
+## KV Caching
+KV caching occurs during multiple generation steps & only happens in the decoder(in decoder-only modelss like GPT, T5...)
+- The Decoder works in an autoregresive fashion which means given an input model predicts the next token and then taking combined input in the next step and so the next prediction is made.
+- since the decoder is causal, at each generation step the previous token's attention is recalculated even though its required for only the new token
+for a sequence:
+```
+This is a Dog
+```
+This - assume 4 query heads and 2 KV groups so heads Q<sub>1</sub>, Q<sub>2</sub> share K<sub>A</sub>, V<sub>A</sub> and Q<sub>3</sub>, Q<sub>4</sub> share K<sub>B</sub>, V<sub>B</sub>
+Input = `"I"` compute Q<sub>1</sub>, Q<sub>2</sub & K<sub>A</sub>, K<sub>B</sub>
+and for `["I am"]` 
+projections recompute Q<sub>1</sub>...Q<sub>4</sub> and K<sub>A</sub>, V<sub>A</sub>, K<sub>B</sub>, V<sub>B</sub>
+with KV caching :
+Input = `"I"` 
+we calculate:  
+**Q<sub>1..4</sub><sup>(1)</sup>, K<sub>A</sub><sup>(1)</sup>, V<sub>A</sub><sup>(1)</sup>**  
+ and  
+**K<sub>B</sub><sup>(1)</sup>, V<sub>B</sub><sup>(1)</sup>** 
+for "I" then   
+store in cache:  
+**(K<sub>A</sub><sup>(1)</sup>, V<sub>A</sub><sup>(1)</sup>) and in other group (K<sub>B</sub><sup>(1)</sup>, V<sub>B</sub><sup>(1)</sup>)**
+
+- by caching previous keys and values attention is calculated for the new token
+- matrices obtained with KV caching are way smaller which leeds to faster matrix multiplication
