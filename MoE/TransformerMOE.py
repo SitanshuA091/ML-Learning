@@ -130,3 +130,32 @@ class MoEConfig:
         self.moe_aux_loss_coef = moe_aux_loss_coef
         self.d_ff = d_ff
 
+@pytest.fixture
+def config():
+    return MoEConfig()
+
+def test_moe_output_shape(config):
+    layer = MoELayer(config)
+    batch_size, seq_len = 2, 16
+    x = torch.randn(batch_size, seq_len, config.d_model)
+
+    output, aux_loss = layer(x)
+
+    # Check output shape matches input shape
+    assert output.shape == (batch_size, seq_len, config.d_model)
+    # Check aux loss is a scalar tensor
+    assert aux_loss.ndim == 0
+    assert not torch.isnan(aux_loss)
+
+def test_moe_gradient_flow(config):
+    layer = MoELayer(config)
+    x = torch.randn(2, 8, config.d_model, requires_grad=True)
+
+    output, aux_loss = layer(x)
+    total_loss = output.sum() + aux_loss
+    total_loss.backward()
+
+    # Check that gradients flow back to inputs and parameters
+    assert x.grad is not None
+    assert layer.router.weight.grad is not None
+    assert layer.experts[0].w1.weight.grad is not None
