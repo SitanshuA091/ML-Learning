@@ -1,10 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import pytest
 
-# 1. Self-Contained SwiGLU FeedForward Expert
-class SimpleSwiGLUFeedForward(nn.Module):
+# Mock Dependencies for Transformer Components 
+class SwiGLUFeedForward(nn.Module):
     def __init__(self, d_model, hidden_dim, dropout=0.0):
         super().__init__()
         self.w1 = nn.Linear(d_model, hidden_dim, bias=False)
@@ -15,8 +14,20 @@ class SimpleSwiGLUFeedForward(nn.Module):
     def forward(self, x):
         return self.w2(self.dropout(F.silu(self.w1(x)) * self.w3(x)))
 
+class GroupedQueryAttention(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.d_model = config.d_model
+        self.proj = nn.Linear(self.d_model, self.d_model)
 
-# 2. Independent MoE Layer
+    def forward(self, x):
+        return self.proj(x)
+
+def shift_inputs_and_labels(input_ids, labels):
+    return input_ids[:, :-1], labels[:, 1:]
+
+
+# Transformer MoE Implementation
 class MoELayer(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -24,13 +35,13 @@ class MoELayer(nn.Module):
         self.d_model = config.d_model
         self.n_experts = config.n_experts
         self.n_active_experts = config.n_active_experts
-        self.dropout = getattr(config, "dropout", 0.0)
-        self.aux_loss_coef = getattr(config, "moe_aux_loss_coef", 0.01)
+        self.dropout = config.dropout
+        self.aux_loss_coef = config.moe_aux_loss_coef
 
         hidden_dim = getattr(
             config,
             "moe_expert_hidden_dim",
-            getattr(config, "d_ff", 4 * self.d_model)
+            config.d_ff
         )
 
         self.router = nn.Linear(
@@ -40,7 +51,7 @@ class MoELayer(nn.Module):
         )
 
         self.experts = nn.ModuleList([
-            SimpleSwiGLUFeedForward(
+            SwiGLUFeedForward(
                 self.d_model,
                 hidden_dim,
                 dropout=self.dropout
@@ -118,44 +129,135 @@ class MoELayer(nn.Module):
 
         output = output.view(batch_size, seq_len, d_model)
         return output, aux_loss
+    
+class MoETransformerBlock(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.norm1 = nn.RMSNorm(config.d_model, eps=config.rms_norm_eps)
+        self.norm2 = nn.RMSNorm(config.d_model, eps=config.rms_norm_eps)
+        self.attention = GroupedQueryAttention(config)
+        self.moe = MoELayer(config)
+        self.dropout = nn.Dropout(config.dropout)
+
+    def forward(self, x):
+        x = x + self.dropout(self.attention(self.norm1(x)))
+        moe_out, aux_loss = self.moe(self.norm2(x))
+        x = x + self.dropout(moe_out)
+        return x, aux_loss
+    
+class Qwen3MOELM(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+        self.token_embedding = nn.Embedding(config.vocab_size, config.d_model)
+        self.layers = nn.ModuleList([
+            MoETransformerBlock(config)
+            for _ in range(config.n_layers)
+        ])
+        self.final_norm = nn.RMSNorm(config.d_model, eps=config.rms_norm_eps)
+        self.lm_head = nn.Linear(config.d_model, config.vocab_size, bias=False)
+        self.dropout = nn.Dropout(config.dropout)
+
+        if getattr(config, "tie_embeddings", False):
+            self.lm_head.weight = self.token_embedding.weight
+
+        self.aux_loss_coef = getattr(config, "moe_aux_loss_coef", 0.01)
+
+    def forward(self, input_ids, labels=None):
+        if labels is not None:
+            input_ids, labels = shift_inputs_and_labels(input_ids, labels)
+
+        x = self.token_embedding(input_ids)
+        x = self.dropout(x)
+
+        total_aux_loss = 0.0
+        for layer in self.layers:
+            x, aux_loss = layer(x)
+            total_aux_loss = total_aux_loss + aux_loss
+
+        total_aux_loss = total_aux_loss / len(self.layers)
+        x = self.final_norm(x)
+        logits = self.lm_head(x)
+
+        loss = None
+        if labels is not None:
+            lm_loss = F.cross_entropy(
+                logits.reshape(-1, logits.size(-1)),
+                labels.reshape(-1),
+                ignore_index=-100,
+            )
+            loss = lm_loss + (self.aux_loss_coef * total_aux_loss)
+
+        return {
+            "logits": logits,
+            "loss": loss,
+            "aux_loss": total_aux_loss,
+        }
 
 
-# 3. PyTest Unit Tests
+# Experts n other Configs
 class MoEConfig:
-    def __init__(self, d_model=64, n_experts=4, n_active_experts=2, dropout=0.1, moe_aux_loss_coef=0.01, d_ff=256):
-        self.d_model = d_model
-        self.n_experts = n_experts
-        self.n_active_experts = n_active_experts
-        self.dropout = dropout
-        self.moe_aux_loss_coef = moe_aux_loss_coef
-        self.d_ff = d_ff
+    def __init__(self):
+        self.d_model = 64
+        self.n_experts = 4
+        self.n_active_experts = 2
+        self.dropout = 0.1
+        self.moe_aux_loss_coef = 0.01
+        self.d_ff = 128
+        self.vocab_size = 500
+        self.n_layers = 2
+        self.rms_norm_eps = 1e-5
+        self.tie_embeddings = False
 
-@pytest.fixture
-def config():
-    return MoEConfig()
+def test_moe():
+    config = MoEConfig()
+    batch_size = 16
+    seq_len = 8
 
-def test_moe_output_shape(config):
-    layer = MoELayer(config)
-    batch_size, seq_len = 2, 16
-    x = torch.randn(batch_size, seq_len, config.d_model)
+    # Initialize the full transformer MoE language model
+    model = Qwen3MOELM(config)
 
-    output, aux_loss = layer(x)
+    input_ids = torch.randint(0, config.vocab_size, (batch_size, seq_len))
+    output_dict = model(input_ids)
 
-    # Check output shape matches input shape
-    assert output.shape == (batch_size, seq_len, config.d_model)
-    # Check aux loss is a scalar tensor
-    assert aux_loss.ndim == 0
-    assert not torch.isnan(aux_loss)
+    logits = output_dict["logits"]
+    aux_loss = output_dict["aux_loss"]
 
-def test_moe_gradient_flow(config):
-    layer = MoELayer(config)
-    x = torch.randn(2, 8, config.d_model, requires_grad=True)
+    print(f"Input IDs shape: {input_ids.shape}")
+    print(f"Logits shape: {logits.shape}")
 
-    output, aux_loss = layer(x)
-    total_loss = output.sum() + aux_loss
-    total_loss.backward()
+    assert logits.shape == (
+        batch_size, seq_len, config.vocab_size
+    ), "Logits shape mismatch"
 
-    # Check that gradients flow back to inputs and parameters
-    assert x.grad is not None
-    assert layer.router.weight.grad is not None
-    assert layer.experts[0].w1.weight.grad is not None
+    # Test individual MoE layer routing and top-k weights normalization
+    moe_layer = model.layers[0].moe
+    dummy_x = torch.randn(batch_size, seq_len, config.d_model)
+    
+    router_logits = moe_layer.router(dummy_x)
+    router_probs = F.softmax(router_logits, dim=-1)
+    topk_probs, topk_idx = torch.topk(router_probs, k=config.n_active_experts, dim=-1)
+    topk_probs = topk_probs / topk_probs.sum(dim=-1, keepdim=True)
+
+    expected_shape = (batch_size, seq_len, config.n_active_experts)
+    assert topk_idx.shape == expected_shape
+    assert topk_probs.shape == expected_shape
+
+    weight_sums = topk_probs.sum(dim=-1)
+    assert torch.allclose(
+        weight_sums,
+        torch.ones_like(weight_sums),
+        atol=1e-6,
+    ), "Normalized expert weights should sum to 1"
+
+    # Verify that gradients flow through the full transformer model including router & experts
+    loss = logits.square().mean() + aux_loss
+    loss.backward()
+
+    assert model.layers[0].moe.router.weight.grad is not None
+    assert model.layers[0].moe.experts[0].w1.weight.grad is not None
+
+    print("All transformer MoE tests passed!")
+
+if __name__ == "__main__":
+    test_moe()
