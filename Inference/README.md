@@ -4,5 +4,11 @@ These important files live in the SSD
 
 ## INFERENCE
 The steps in Inference may go through these steps
-Model Loading -> Prefill + Decoding -> Serving
-Machines have a hierarchy of memory - GPU, RAM + CPU, SSD Inference engines use MMAP(Memory Map) to load the model which is the OS keeps track of the logical location of where weights are stored on the SSD when needed it loads lazily to the RAM (instead of eagerly)
+- Model Loading -> Prefill + Decoding -> Serving
+Machines have a hierarchy of memory - GPU, RAM + CPU, SSD Inference engines use MMAP(Memory Map) to load the model 
+- MMAP is where is the OS keeps track of the logical location of where weights are stored on the SSD when needed it loads lazily to the RAM (instead of eagerly) so that we save time loading the model.
+- once the model weights are loaded in RAM the OS could evict it for other applications and once the inference engine requires to access it they can be loaded back from SSD to RAM.
+- given a 15GB model is held in a 32GB RAM, communication medium between the RAM and SSD is the **PCIe Bus** which runs at 7.6GB/s on the 4.0 NvMe so unloading 5% f the weights (750MB of 16GB) at the speed would mean 107Ms of latency
+- during inference weights have to be pushed to the GPU which does the heavy lifting of matrix multiplications from an input embedding
+- **Quantization** takes model weights in BF16 and reduces them into FP32 and other lower precision types.
+- GGUF is the most popular method used to lower the precision of model weights during the loading stage
